@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cruce de Datos - Elecciones SENA</title>
+
+    <!-- Bootstrap 5 -->
+    <link
+        href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+    <!-- Bootstrap Icons -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css"
+    >
+
+    <style>
+        body {
+            background-color: #f4f6f9;
+        }
+        .navbar-sena {
+            background-color: #39A900; /* verde institucional SENA */
+        }
+        .card {
+            border: none;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        .card-header-custom {
+            background-color: #ffffff;
+            border-bottom: 1px solid #eee;
+            border-radius: 14px 14px 0 0 !important;
+        }
+        .btn-sena {
+            background-color: #39A900;
+            border-color: #39A900;
+            color: #fff;
+            font-weight: 600;
+        }
+        .btn-sena:hover {
+            background-color: #2f8c00;
+            border-color: #2f8c00;
+            color: #fff;
+        }
+        .table-preview-wrapper {
+            overflow-x: auto;
+        }
+        .table-preview-wrapper table {
+            font-size: 0.85rem;
+        }
+        .badge-encontrado {
+            background-color: #39A900;
+        }
+        .badge-no-encontrado {
+            background-color: #dc3545;
+        }
+        footer {
+            color: #888;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Barra superior -->
+    <nav class="navbar navbar-dark navbar-sena mb-4 shadow-sm">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-diagram-3-fill me-2"></i>
+                Cruce de Datos · Elecciones SENA
+            </span>
+        </div>
+    </nav>
+
+    <div class="container mb-5">
+
+        <!-- Mensajes flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for categoria, mensaje in messages %}
+                    <div class="alert alert-{{ categoria }} alert-dismissible fade show" role="alert">
+                        {{ mensaje }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Tarjeta: formulario de carga -->
+        <div class="card mb-4">
+            <div class="card-header card-header-custom py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-cloud-upload me-2 text-success"></i>
+                    Cargar archivos para el cruce
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted">
+                    Sube el Excel de <strong>votantes</strong> (hoja "Votantes") y el Excel oficial de
+                    <strong>matrículas del SENA</strong> (con la cabecera en la fila 5). El sistema
+                    cruzará automáticamente la cédula del votante con el número de documento del
+                    aprendiz para anexar Ficha, Nombre, Apellidos y Programa de formación.
+                </p>
+
+                <form action="{{ url_for('procesar') }}" method="post" enctype="multipart/form-data">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label for="archivo_votantes" class="form-label fw-semibold">
+                                <i class="bi bi-people-fill me-1"></i>
+                                1. Archivo de Votantes (.xlsx)
+                            </label>
+                            <input
+                                class="form-control"
+                                type="file"
+                                id="archivo_votantes"
+                                name="archivo_votantes"
+                                accept=".xlsx,.xls"
+                                required
+                            >
+                            <div class="form-text">
+                                Debe contener las columnas: <code>Cedula</code>, <code>FechaHora</code>,
+                                <code>CandidatoId</code> en la hoja "Votantes".
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="archivo_matriculas" class="form-label fw-semibold">
+                                <i class="bi bi-mortarboard-fill me-1"></i>
+                                2. Base de Datos de Matrículas SENA (.xlsx)
+                            </label>
+                            <input
+                                class="form-control"
+                                type="file"
+                                id="archivo_matriculas"
+                                name="archivo_matriculas"
+                                accept=".xlsx,.xls"
+                                required
+                            >
+                            <div class="form-text">
+                                Estructura oficial con cabecera en la fila 5:
+                                <code>FICHA</code>, <code>NUMERO_DOCUMENTO</code>, <code>NOMBRE</code>,
+                                <code>PRIMER_APELLIDO</code>, <code>SEGUNDO_APELLIDO</code>,
+                                <code>PROGRAMA</code>, <code>ESTADO_APRENDIZ</code>.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid d-md-flex justify-content-md-end mt-4">
+                        <button type="submit" class="btn btn-sena btn-lg px-4">
+                            <i class="bi bi-arrow-repeat me-2"></i>
+                            Procesar y Cruzar Datos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tarjeta: resultados (solo se muestra tras procesar) -->
+        {% if resultado_listo %}
+        <div class="card">
+            <div class="card-header card-header-custom py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    Resultado del cruce
+                </h5>
+                <a
+                    href="{{ url_for('descargar', nombre_archivo=nombre_descarga) }}"
+                    class="btn btn-sena"
+                >
+                    <i class="bi bi-file-earmark-excel-fill me-2"></i>
+                    Descargar Elecciones_Sena_Consolidado.xlsx
+                </a>
+            </div>
+            <div class="card-body p-4">
+
+                <!-- Resumen de cifras -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 text-center h-100">
+                            <div class="fs-4 fw-bold">{{ total_votantes }}</div>
+                            <div class="text-muted small">Total de votos registrados</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 text-center h-100">
+                            <div class="fs-4 fw-bold text-success">{{ total_encontrados }}</div>
+                            <div class="text-muted small">
+                                <span class="badge badge-encontrado">Encontrados</span>
+                                en la base de matrículas
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 text-center h-100">
+                            <div class="fs-4 fw-bold text-danger">{{ total_no_encontrados }}</div>
+                            <div class="text-muted small">
+                                <span class="badge badge-no-encontrado">No encontrados</span>
+                                (posible inconsistencia)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="mb-3">
+                    <i class="bi bi-table me-1"></i>
+                    Vista previa (primeras 15 filas)
+                </h6>
+                <div class="table-preview-wrapper">
+                    {{ tabla_preview | safe }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+
+    <div class="container text-center pb-4">
+        <footer>
+            Aplicación interna de apoyo al proceso de Elecciones del SENA · Uso institucional.
+        </footer>
+    </div>
+
+    <!-- Bootstrap JS (para alertas y componentes interactivos) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
